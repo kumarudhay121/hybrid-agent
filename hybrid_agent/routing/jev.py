@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from langchain_core.messages import BaseMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_typesafe import Choice, TypeSafeClassifier
 
 from ..schemas import RouteDecision
@@ -38,6 +39,7 @@ class JevRouter:
         tool_results: list[dict],
         iteration: int,
         max_iterations: int,
+        config: RunnableConfig | None = None,
     ) -> RouteDecision:
         criteria = dict(tools)
         criteria["finish"] = (
@@ -61,7 +63,8 @@ class JevRouter:
                         criteria=criteria,
                     )
                 },
-            }
+            },
+            config=config,
         )
 
         selected = response.choices[self.question_name].choice
