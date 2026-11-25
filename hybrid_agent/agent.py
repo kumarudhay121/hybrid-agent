@@ -6,6 +6,7 @@ from typing import Any, Sequence
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 
 from .routing.base import Router
@@ -40,7 +41,7 @@ def create_hybrid_agent(
 
     tool_descriptions = {tool.name: tool.description for tool in tools}
 
-    def router_node(state: HybridAgentState) -> dict:
+    def router_node(state: HybridAgentState, config: RunnableConfig) -> dict:
         iteration = state.get("iteration", 0)
         if iteration >= max_iterations:
             decision = RouteDecision(
@@ -54,6 +55,7 @@ def create_hybrid_agent(
                 tool_results=state.get("tool_results", []),
                 iteration=iteration,
                 max_iterations=max_iterations,
+                config=config,
             )
             if (
                 decision.action == "call_tool"
@@ -71,7 +73,7 @@ def create_hybrid_agent(
             else "finalize"
         )
 
-    def execute_tool_node(state: HybridAgentState) -> dict:
+    def execute_tool_node(state: HybridAgentState, config: RunnableConfig) -> dict:
         decision = state["route_decision"]
         tool_name = decision["tool_name"]
         selected_tool = registry[tool_name]
@@ -88,7 +90,7 @@ def create_hybrid_agent(
             ),
             *state.get("messages", []),
         ]
-        response = executor.bind_tools([selected_tool]).invoke(prompt)
+        response = executor.bind_tools([selected_tool]).invoke(prompt, config=config)
         calls = getattr(response, "tool_calls", None) or []
         matching_calls = [call for call in calls if call.get("name") == tool_name]
 
@@ -116,7 +118,7 @@ def create_hybrid_agent(
         call_id = call.get("id") or f"hybrid-tool-{state.get('iteration', 0) + 1}"
 
         try:
-            result = selected_tool.invoke(arguments)
+            result = selected_tool.invoke(arguments, config=config)
             result_text = (
                 result if isinstance(result, str)
                 else json.dumps(result, ensure_ascii=False, default=str)
@@ -144,7 +146,7 @@ def create_hybrid_agent(
             "iteration": state.get("iteration", 0) + 1,
         }
 
-    def finalize_node(state: HybridAgentState) -> dict:
+    def finalize_node(state: HybridAgentState, config: RunnableConfig) -> dict:
         history = state.get("tool_results", [])
         context = (
             "Tool execution history (JSON):\n"
@@ -155,7 +157,8 @@ def create_hybrid_agent(
                 SystemMessage(content=executor_system_prompt),
                 SystemMessage(content=context),
                 *state.get("messages", []),
-            ]
+            ],
+            config=config,
         )
         content = response.content
         if not isinstance(content, str):
