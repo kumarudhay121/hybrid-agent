@@ -9,14 +9,14 @@ description = "Multi-model agent orchestration built on LangGraph"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "langgraph>=0.2.0",
-  "langchain-core>=0.3.0",
+  "langgraph>=1.0.0",
+  "langchain-core>=1.6.2",
   "pydantic>=2.7.0"
 ]
 
 [project.optional-dependencies]
 jev = ["langchain-typesafe"]
-openai = ["langchain-openai>=0.2.0"]
+openai = ["langchain-openai>=1.0.0"]
 dev = ["pytest>=8.0.0", "ruff>=0.6.0"]
 
 [tool.setuptools.packages.find]
