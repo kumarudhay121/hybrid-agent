@@ -76,20 +76,19 @@ def create_hybrid_agent(
         tool_name = decision["tool_name"]
         selected_tool = registry[tool_name]
 
-        # Bind only the selected tool. The executor supplies arguments, not
-        # the tool choice; Jev owns that decision.
-        tool_call_prompt = [
+        # Jev chooses the tool. The executor only fills its schema arguments.
+        prompt = [
             SystemMessage(
                 content=(
                     f"{executor_system_prompt}\n"
                     f"Jev selected exactly one tool: {tool_name}. "
-                    "Call this tool once with arguments matching its schema. "
-                    "Do not select a different tool."
+                    "Call this tool exactly once with arguments matching its "
+                    "schema. Do not select a different tool."
                 )
             ),
             *state.get("messages", []),
         ]
-        response = executor.bind_tools([selected_tool]).invoke(tool_call_prompt)
+        response = executor.bind_tools([selected_tool]).invoke(prompt)
         calls = getattr(response, "tool_calls", None) or []
         matching_calls = [call for call in calls if call.get("name") == tool_name]
 
@@ -98,21 +97,16 @@ def create_hybrid_agent(
                 f"Executor did not return exactly one call to {tool_name!r}; "
                 f"received {len(matching_calls)} matching calls."
             )
-            call_id = f"hybrid-tool-{state.get('iteration', 0) + 1}"
-            tool_message = ToolMessage(
-                content=error_text,
-                tool_call_id=call_id,
-                name=tool_name,
-                status="error",
-            )
             record = {
                 "tool_name": tool_name,
                 "arguments": {},
                 "result": error_text,
                 "error": True,
             }
+            # Do not append an unmatched ToolMessage: it would create an
+            # invalid tool-call/message pair in the chat history.
             return {
-                "messages": [response, tool_message],
+                "messages": [AIMessage(content=error_text)],
                 "tool_results": [*state.get("tool_results", []), record],
                 "iteration": state.get("iteration", 0) + 1,
             }
@@ -183,5 +177,4 @@ def create_hybrid_agent(
     )
     graph.add_edge("execute_tool", "router")
     graph.add_edge("finalize", END)
-
     return graph.compile(checkpointer=checkpointer)
