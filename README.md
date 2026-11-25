@@ -12,9 +12,11 @@ Status: early development (`0.1.0`). The LangChain TypeSafe integration is evolv
 
 ```bash
 pip install -e ".[dev,jev,openai]"
+# Optional observability:
+pip install -e ".[langfuse]"
 ```
 
-Set `TYPESAFE_API_KEY` and `OPENAI_API_KEY` in your environment.
+Set `TYPESAFE_API_KEY` and `OPENAI_API_KEY` in your environment. For tracing, configure `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_BASE_URL`.
 
 ## Architecture
 
@@ -95,5 +97,29 @@ Treat model output and tool arguments as untrusted. Enforce authorization inside
 - [x] Tool allowlist and iteration guard
 - [ ] Adapter contract tests against live TypeSafe API
 - [ ] Async invocation and streaming facade
-- [ ] Middleware, retries and tracing
+- [x] Optional Langfuse tracing via LangGraph callbacks
+- [ ] Middleware, retries
 - [ ] Persistent checkpoint examples
+
+
+## Observability with Langfuse
+
+Langfuse is optional. Install the extra and configure the three `LANGFUSE_*` environment variables shown in `.env.example`. Create a callback handler and pass it to the graph invocation; the callback is propagated to Jev, the executor model, and tool calls:
+
+```python
+from langfuse.langchain import CallbackHandler
+
+langfuse_handler = CallbackHandler()
+result = agent.invoke(
+    {"messages": [{"role": "user", "content": "Find employee 101"}]},
+    config={
+        "callbacks": [langfuse_handler],
+        "run_name": "hybrid-agent",
+        "tags": ["hybrid-agent"],
+        "metadata": {"environment": "development"},
+    },
+)
+print(result["final_answer"])
+```
+
+Each invocation can be inspected as a trace in Langfuse. The trace helps debug routing decisions, executor tool calls, tool execution, errors, and the final response. Token and cost details depend on whether the underlying model/provider reports usage metadata. Avoid logging secrets or sensitive tool payloads.
